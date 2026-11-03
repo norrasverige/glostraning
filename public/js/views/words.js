@@ -22,6 +22,13 @@ export async function wordsView(app) {
   const recent = new Set();
 
   const dates = loadLastDates();
+  const homeworkName = h('input', {
+    type: 'text',
+    maxlength: 100,
+    placeholder: 'e.g. Chapter 3',
+    autocomplete: 'off',
+    required: true,
+  });
   const start = h('input', { type: 'date', value: dates.start, required: true });
   const due = h('input', { type: 'date', value: dates.due, required: true });
   const sv = h('input', { type: 'text', maxlength: 200, placeholder: 'e.g. hund  or  Jag har en hund.', autocomplete: 'off' });
@@ -46,7 +53,13 @@ export async function wordsView(app) {
     if (!sv.value.trim()) return sv.focus();
     if (!en.value.trim()) return en.focus();
     try {
-      const word = await api.addWord(profile.id, { sv: sv.value, en: en.value, start_date: start.value, due_date: due.value });
+      const word = await api.addWord(profile.id, {
+        homework_name: homeworkName.value,
+        sv: sv.value,
+        en: en.value,
+        start_date: start.value,
+        due_date: due.value,
+      });
       words = [word, ...words];
       recent.add(word.id);
       sv.value = en.value = '';
@@ -61,6 +74,7 @@ export async function wordsView(app) {
     const f = {
       sv: h('input', { type: 'text', maxlength: 200, value: w.sv, 'aria-label': 'Swedish' }),
       en: h('input', { type: 'text', maxlength: 200, value: w.en, 'aria-label': 'English' }),
+      name: h('input', { type: 'text', maxlength: 100, value: w.homework_name, 'aria-label': 'Homework name', required: true }),
       start: h('input', { type: 'date', value: w.start_date, 'aria-label': 'Homework date' }),
       due: h('input', { type: 'date', value: w.due_date, 'aria-label': 'Deadline' }),
     };
@@ -71,7 +85,13 @@ export async function wordsView(app) {
         onsubmit: async (e) => {
           e.preventDefault();
           try {
-            const updated = await api.updateWord(w.id, { sv: f.sv.value, en: f.en.value, start_date: f.start.value, due_date: f.due.value });
+            const updated = await api.updateWord(w.id, {
+              homework_name: f.name.value,
+              sv: f.sv.value,
+              en: f.en.value,
+              start_date: f.start.value,
+              due_date: f.due.value,
+            });
             words = words.map((x) => (x.id === w.id ? updated : x));
             editingId = null;
             renderList();
@@ -82,6 +102,7 @@ export async function wordsView(app) {
       },
       f.sv,
       f.en,
+      f.name,
       f.start,
       f.due,
       h('button', { type: 'submit', class: 'btn small primary' }, 'Save'),
@@ -125,22 +146,33 @@ export async function wordsView(app) {
 
   function renderList() {
     heading.textContent = `All words (${words.length})`;
-    const shown = filter ? words.filter((w) => `${w.sv} ${w.en}`.toLowerCase().includes(filter)) : words;
+    const shown = filter
+      ? words.filter((w) => `${w.homework_name} ${w.sv} ${w.en}`.toLowerCase().includes(filter))
+      : words;
     const groups = new Map();
     for (const w of shown) {
-      const key = `${w.start_date}_${w.due_date}`;
+      const key = JSON.stringify([w.homework_name, w.start_date, w.due_date]);
       if (!groups.has(key)) groups.set(key, []);
       groups.get(key).push(w);
     }
-    const sorted = [...groups.entries()].sort(([a], [b]) => b.localeCompare(a));
+    const sorted = [...groups.values()].sort(
+      (a, b) =>
+        b[0].start_date.localeCompare(a[0].start_date) ||
+        b[0].due_date.localeCompare(a[0].due_date) ||
+        a[0].homework_name.localeCompare(b[0].homework_name),
+    );
     list.replaceChildren(
       ...(sorted.length
-        ? sorted.map(([key, items]) => {
-            const [s, d] = key.split('_');
+        ? sorted.map((items) => {
             return h(
               'section',
               { class: 'word-group' },
-              h('h3', {}, `📅 ${periodLabel(s, d)}`, h('span', { class: 'muted' }, ` · ${items.length}`)),
+              h(
+                'h3',
+                {},
+                `📚 ${items[0].homework_name} · 📅 ${periodLabel(items[0].start_date, items[0].due_date)}`,
+                h('span', { class: 'muted' }, ` · ${items.length}`),
+              ),
               items.map((w) => (w.id === editingId ? editRow(w) : viewRow(w))),
             );
           })
@@ -158,6 +190,11 @@ export async function wordsView(app) {
     h(
       'form',
       { class: 'card form', onsubmit: add },
+      h(
+        'div',
+        { class: 'row' },
+        h('label', { class: 'grow' }, 'Homework name', homeworkName),
+      ),
       h(
         'div',
         { class: 'row' },

@@ -21,6 +21,19 @@ function loadConfig() {
   }
 }
 
+function periodKey(period) {
+  return JSON.stringify([period.homework_name, period.start_date, period.due_date]);
+}
+
+function periodValues(key) {
+  try {
+    return JSON.parse(key);
+  } catch {
+    const [start, due] = key.split('_');
+    return [start, due];
+  }
+}
+
 export async function practiceView(app) {
   const { profile } = app.state;
   const periods = await api.periods(profile.id);
@@ -31,7 +44,7 @@ export async function practiceView(app) {
   }
   const today = localDate();
   if (!cfg.periods.length) {
-    cfg.periods = periods.filter((p) => p.start_date <= today && p.due_date >= today).map((p) => `${p.start_date}_${p.due_date}`);
+    cfg.periods = periods.filter((p) => p.start_date <= today && p.due_date >= today).map(periodKey);
   }
 
   const modeCards = MODES.map((m) =>
@@ -111,12 +124,33 @@ export async function practiceView(app) {
             'div',
             { class: 'period-list' },
             periods.map((p) => {
-              const key = `${p.start_date}_${p.due_date}`;
+              const key = periodKey(p);
               const box = h('input', { type: 'checkbox', checked: cfg.periods.includes(key) });
               box.addEventListener('change', () => {
-                cfg.periods = box.checked ? [...cfg.periods, key] : cfg.periods.filter((k) => k !== key);
+                const legacyKey = `${p.start_date}_${p.due_date}`;
+                const selected = cfg.periods.flatMap((k) =>
+                  k === legacyKey
+                    ? periods
+                        .filter(
+                          (other) =>
+                            other.start_date === p.start_date &&
+                            other.due_date === p.due_date &&
+                            periodKey(other) !== key,
+                        )
+                        .map(periodKey)
+                    : [k],
+                );
+                cfg.periods = box.checked ? [...selected, key] : selected.filter((k) => k !== key);
               });
-              return h('label', { class: 'check' }, box, periodLabel(p.start_date, p.due_date), h('span', { class: 'muted' }, ` · ${p.count}`));
+              const legacyKey = `${p.start_date}_${p.due_date}`;
+              if (!box.checked && cfg.periods.includes(legacyKey)) box.checked = true;
+              return h(
+                'label',
+                { class: 'check' },
+                box,
+                `${p.homework_name} · ${periodLabel(p.start_date, p.due_date)}`,
+                h('span', { class: 'muted' }, ` · ${p.count}`),
+              );
             }),
           )
         : h('p', { class: 'muted' }, 'No homework yet.'),
@@ -133,10 +167,11 @@ export async function practiceView(app) {
       Object.assign(params, { from: cfg.from, to: cfg.to });
     } else if (cfg.source === 'periods') {
       if (!cfg.periods.length) return toast('Tick at least one homework.', 'warn');
-      params.periods = cfg.periods.join(',');
+      params.periods = JSON.stringify(cfg.periods.map(periodValues));
     } else {
       params.hard = '1';
     }
+
     if (cfg.mode === 'memory') params.limit = MEMORY_MAX_PAIRS;
     else if (cfg.count !== 'all') params.limit = cfg.count;
 

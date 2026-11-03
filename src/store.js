@@ -20,6 +20,7 @@ CREATE TABLE IF NOT EXISTS words (
   profile_id INTEGER NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
   sv TEXT NOT NULL,
   en TEXT NOT NULL,
+  homework_name TEXT NOT NULL DEFAULT 'Homework',
   start_date TEXT NOT NULL,
   due_date TEXT NOT NULL,
   created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
@@ -59,7 +60,7 @@ const HARD_WORD_IDS = `
   SELECT word_id FROM attempts WHERE profile_id = ?
   GROUP BY word_id HAVING 1.0 * SUM(correct) / COUNT(*) < 0.8`;
 
-const WORD_COLUMNS = 'id, sv, en, start_date, due_date';
+const WORD_COLUMNS = 'id, homework_name, sv, en, start_date, due_date';
 
 export function openStore(file) {
   if (file !== ':memory:') mkdirSync(dirname(file), { recursive: true });
@@ -67,6 +68,10 @@ export function openStore(file) {
   db.exec('PRAGMA foreign_keys = ON;');
   if (file !== ':memory:') db.exec('PRAGMA journal_mode = WAL;');
   db.exec(SCHEMA);
+  const wordColumns = db.prepare('PRAGMA table_info(words)').all().map((column) => column.name);
+  if (!wordColumns.includes('homework_name')) {
+    db.exec("ALTER TABLE words ADD COLUMN homework_name TEXT NOT NULL DEFAULT 'Homework'");
+  }
 
   const transaction = (fn) => {
     db.exec('BEGIN');
@@ -154,15 +159,16 @@ export function openStore(file) {
 
     getWord,
 
-    addWord(profileId, { sv, en, start_date, due_date }) {
+    addWord(profileId, { homework_name = 'Homework', sv, en, start_date, due_date }) {
       const { lastInsertRowid } = db
-        .prepare('INSERT INTO words (profile_id, sv, en, start_date, due_date) VALUES (?, ?, ?, ?, ?)')
-        .run(profileId, sv, en, start_date, due_date);
+        .prepare('INSERT INTO words (profile_id, homework_name, sv, en, start_date, due_date) VALUES (?, ?, ?, ?, ?, ?)')
+        .run(profileId, homework_name, sv, en, start_date, due_date);
       return getWord(lastInsertRowid);
     },
 
-    updateWord(id, { sv, en, start_date, due_date }) {
-      db.prepare('UPDATE words SET sv = ?, en = ?, start_date = ?, due_date = ? WHERE id = ?').run(
+    updateWord(id, { homework_name = 'Homework', sv, en, start_date, due_date }) {
+      db.prepare('UPDATE words SET homework_name = ?, sv = ?, en = ?, start_date = ?, due_date = ? WHERE id = ?').run(
+        homework_name,
         sv,
         en,
         start_date,
@@ -177,8 +183,8 @@ export function openStore(file) {
     listPeriods: (profileId) =>
       db
         .prepare(
-          `SELECT start_date, due_date, COUNT(*) AS count FROM words WHERE profile_id = ?
-           GROUP BY start_date, due_date ORDER BY start_date DESC, due_date DESC`,
+          `SELECT homework_name, start_date, due_date, COUNT(*) AS count FROM words WHERE profile_id = ?
+           GROUP BY homework_name, start_date, due_date ORDER BY start_date DESC, due_date DESC, homework_name`,
         )
         .all(profileId),
 
@@ -190,7 +196,13 @@ export function openStore(file) {
         params.push(profileId);
       }
       if (periods?.length) {
-        sql += ` AND (${periods.map(() => '(start_date = ? AND due_date = ?)').join(' OR ')})`;
+        sql += ` AND (${periods
+          .map((period) =>
+            period.length === 3
+              ? '(homework_name = ? AND start_date = ? AND due_date = ?)'
+              : '(start_date = ? AND due_date = ?)',
+          )
+          .join(' OR ')})`;
         params.push(...periods.flat());
       } else if (from || to) {
         // Overlap: the homework started before the range ends and is due after the range starts.

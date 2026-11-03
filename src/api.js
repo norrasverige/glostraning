@@ -3,6 +3,7 @@ const DIRECTIONS = ['sv-en', 'en-sv', 'listen', 'match'];
 const ACCENTS = ['en-GB', 'en-US'];
 const KINDS = ['word', 'sentence', 'both'];
 const MAX_TEXT = 200;
+const MAX_HOMEWORK_NAME = 100;
 const MAX_BODY_BYTES = 100_000;
 
 export class HttpError extends Error {
@@ -38,12 +39,14 @@ function profileInput(body) {
 }
 
 export function wordInput(body) {
+  const homework_name =
+    body?.homework_name == null ? 'Homework' : text(body.homework_name, 'Homework name', MAX_HOMEWORK_NAME);
   const sv = text(body?.sv, 'Swedish', MAX_TEXT);
   const en = text(body?.en, 'English', MAX_TEXT);
   if (!isDate(body?.start_date)) bad('Homework date is not a valid date');
   if (!isDate(body?.due_date)) bad('Deadline is not a valid date');
   if (body.start_date > body.due_date) bad('The deadline must be on or after the homework date');
-  return { sv, en, start_date: body.start_date, due_date: body.due_date };
+  return { homework_name, sv, en, start_date: body.start_date, due_date: body.due_date };
 }
 
 function sessionInput(body) {
@@ -69,14 +72,32 @@ function practiceQuery(q) {
   const to = q.get('to') || undefined;
   if (from && !isDate(from)) bad('Invalid from date');
   if (to && !isDate(to)) bad('Invalid to date');
-  const periods = (q.get('periods') || '')
-    .split(',')
-    .filter(Boolean)
-    .map((p) => {
-      const [start, due] = p.split('_');
+  const rawPeriods = q.get('periods') || '';
+  let periods;
+  if (rawPeriods.startsWith('[')) {
+    try {
+      periods = JSON.parse(rawPeriods);
+    } catch {
+      bad('Invalid homework period');
+    }
+    if (!Array.isArray(periods)) bad('Invalid homework period');
+    periods = periods.map((p) => {
+      if (!Array.isArray(p) || (p.length !== 2 && p.length !== 3)) bad('Invalid homework period');
+      const [name, start, due] =
+        p.length === 3 ? [text(p[0], 'Homework name', MAX_HOMEWORK_NAME), p[1], p[2]] : [undefined, p[0], p[1]];
       if (!isDate(start) || !isDate(due)) bad('Invalid homework period');
-      return [start, due];
+      return p.length === 3 ? [name, start, due] : [start, due];
     });
+  } else {
+    periods = rawPeriods
+      .split(',')
+      .filter(Boolean)
+      .map((p) => {
+        const [start, due] = p.split('_');
+        if (!isDate(start) || !isDate(due)) bad('Invalid homework period');
+        return [start, due];
+      });
+  }
   if (periods.length > 200) bad('Too many homework periods');
   const kind = q.get('kind') || 'both';
   if (!KINDS.includes(kind)) bad('Invalid kind');

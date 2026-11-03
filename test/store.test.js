@@ -8,9 +8,9 @@ let pid;
 beforeEach(() => {
   store = openStore(':memory:');
   pid = store.createProfile({ name: 'Elsa', avatar: '🦊', accent: 'en-GB' }).id;
-  store.addWord(pid, { sv: 'hund', en: 'dog', start_date: '2026-10-01', due_date: '2026-10-08' });
-  store.addWord(pid, { sv: 'katt', en: 'cat', start_date: '2026-10-01', due_date: '2026-10-08' });
-  store.addWord(pid, { sv: 'Jag har en hund.', en: 'I have a dog.', start_date: '2026-10-20', due_date: '2026-10-27' });
+  store.addWord(pid, { homework_name: 'Animals', sv: 'hund', en: 'dog', start_date: '2026-10-01', due_date: '2026-10-08' });
+  store.addWord(pid, { homework_name: 'Animals', sv: 'katt', en: 'cat', start_date: '2026-10-01', due_date: '2026-10-08' });
+  store.addWord(pid, { homework_name: 'Sentences', sv: 'Jag har en hund.', en: 'I have a dog.', start_date: '2026-10-20', due_date: '2026-10-27' });
 });
 
 afterEach(() => store.close());
@@ -21,16 +21,19 @@ test('date range returns words whose period overlaps', () => {
   assert.equal(store.practiceWords(pid, { from: '2026-10-10', to: '2026-10-15' }).length, 0);
 });
 
-test('periods group words by their dates and can be ticked', () => {
+test('homework groups words by name and dates and can be selected independently', () => {
+  store.addWord(pid, { homework_name: 'Food', sv: 'äpple', en: 'apple', start_date: '2026-10-01', due_date: '2026-10-08' });
   const periods = store.listPeriods(pid);
   assert.deepEqual(
-    periods.map((p) => [p.start_date, p.due_date, p.count]),
+    periods.map((p) => [p.homework_name, p.start_date, p.due_date, p.count]),
     [
-      ['2026-10-20', '2026-10-27', 1],
-      ['2026-10-01', '2026-10-08', 2],
+      ['Sentences', '2026-10-20', '2026-10-27', 1],
+      ['Animals', '2026-10-01', '2026-10-08', 2],
+      ['Food', '2026-10-01', '2026-10-08', 1],
     ],
   );
-  assert.equal(store.practiceWords(pid, { periods: [['2026-10-20', '2026-10-27']] }).length, 1);
+  assert.equal(store.practiceWords(pid, { periods: [['Animals', '2026-10-01', '2026-10-08']] }).length, 2);
+  assert.equal(store.practiceWords(pid, { periods: [['2026-10-01', '2026-10-08']] }).length, 3);
 });
 
 test('kind filter separates words and sentences', () => {

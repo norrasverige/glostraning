@@ -281,7 +281,7 @@ input[type='checkbox'] { width: 1.3rem; height: 1.3rem; accent-color: var(--prim
 }
 .word-row:nth-child(even) { background: #faf9ff; }
 .word-row.recent { background: #e6fff3; }
-.word-row.editing { grid-template-columns: 1fr 1fr auto auto auto auto; background: #fff8e1; }
+.word-row.editing { grid-template-columns: 1fr 1fr 1fr auto auto auto auto; background: #fff8e1; }
 .word-row .sv, .word-row .en { display: flex; align-items: center; gap: 0.2rem; word-break: break-word; }
 .row-actions { display: flex; gap: 0.2rem; }
 

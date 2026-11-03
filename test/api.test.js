@@ -24,15 +24,43 @@ test('creates a profile and words with validation', async () => {
   const profile = await (await json('POST', '/api/profiles', { name: 'Elsa', avatar: '🦊', accent: 'en-US' })).json();
   assert.equal(profile.name, 'Elsa');
 
-  const ok = await json('POST', `/api/profiles/${profile.id}/words`, { sv: ' hund ', en: 'dog', start_date: '2026-10-27', due_date: '2026-11-03' });
+  const ok = await json('POST', `/api/profiles/${profile.id}/words`, {
+    homework_name: 'Animals',
+    sv: ' hund ',
+    en: 'dog',
+    start_date: '2026-10-27',
+    due_date: '2026-11-03',
+  });
   assert.equal(ok.status, 200);
-  assert.equal((await ok.json()).sv, 'hund');
+  assert.equal((await ok.json()).homework_name, 'Animals');
 
   const badDates = await json('POST', `/api/profiles/${profile.id}/words`, { sv: 'a', en: 'b', start_date: '2026-11-04', due_date: '2026-11-03' });
   assert.equal(badDates.status, 400);
 
   const empty = await json('POST', `/api/profiles/${profile.id}/words`, { sv: '', en: 'b', start_date: '2026-11-01', due_date: '2026-11-03' });
   assert.equal(empty.status, 400);
+
+  const emptyName = await json('POST', `/api/profiles/${profile.id}/words`, {
+    homework_name: '  ',
+    sv: 'a',
+    en: 'b',
+    start_date: '2026-11-01',
+    due_date: '2026-11-03',
+  });
+  assert.equal(emptyName.status, 400);
+
+  const selected = await (await json(
+    'GET',
+    `/api/profiles/${profile.id}/practice?periods=${encodeURIComponent(JSON.stringify([['Animals', '2026-10-27', '2026-11-03']]))}`,
+  )).json();
+  assert.equal(selected.length, 1);
+  assert.equal(selected[0].homework_name, 'Animals');
+
+  const legacySelection = await (await json(
+    'GET',
+    `/api/profiles/${profile.id}/practice?periods=2026-10-27_2026-11-03`,
+  )).json();
+  assert.equal(legacySelection.length, 1);
 
   const practice = await (await json('GET', `/api/profiles/${profile.id}/practice?from=2026-10-30&to=2026-10-30`)).json();
   assert.equal(practice.length, 1);

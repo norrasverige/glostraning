@@ -9,7 +9,7 @@ export async function homeView(app) {
   const active = periods.filter((p) => p.due_date >= today).sort((a, b) => a.due_date.localeCompare(b.due_date));
 
   const practisePeriod = (p) => {
-    app.state.preset = { source: 'periods', periods: [`${p.start_date}_${p.due_date}`] };
+    app.state.preset = { source: 'periods', periods: [JSON.stringify([p.homework_name, p.start_date, p.due_date])] };
     app.go('practice');
   };
 
@@ -43,7 +43,7 @@ export async function homeView(app) {
               h(
                 'li',
                 {},
-                h('span', {}, periodLabel(p.start_date, p.due_date)),
+                h('span', {}, `${p.homework_name} · ${periodLabel(p.start_date, p.due_date)}`),
                 h('span', { class: 'muted' }, `${p.count} ${p.count === 1 ? 'word' : 'words'}`),
                 p.due_date === today && h('span', { class: 'pill due' }, 'Due today!'),
                 h('button', { type: 'button', class: 'btn small primary', onclick: () => practisePeriod(p) }, 'Practise'),
