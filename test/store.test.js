@@ -1,5 +1,9 @@
 import { test, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
+import { DatabaseSync } from 'node:sqlite';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 import { openStore } from '../src/store.js';
 
 let store;
@@ -14,6 +18,50 @@ beforeEach(() => {
 });
 
 afterEach(() => store.close());
+
+test('upgrades an existing database with the default homework name', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'glostraning-migration-'));
+  const file = join(dir, 'legacy.db');
+  const legacyDb = new DatabaseSync(file);
+  legacyDb.exec(`
+    CREATE TABLE profiles (
+      id INTEGER PRIMARY KEY,
+      name TEXT NOT NULL,
+      avatar TEXT NOT NULL,
+      accent TEXT NOT NULL DEFAULT 'en-GB',
+      points INTEGER NOT NULL DEFAULT 0,
+      best_streak INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
+    );
+    CREATE TABLE words (
+      id INTEGER PRIMARY KEY,
+      profile_id INTEGER NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+      sv TEXT NOT NULL,
+      en TEXT NOT NULL,
+      start_date TEXT NOT NULL,
+      due_date TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
+    );
+    INSERT INTO profiles (id, name, avatar) VALUES (1, 'Elsa', 'fox');
+    INSERT INTO words (profile_id, sv, en, start_date, due_date)
+    VALUES (1, 'hund', 'dog', '2026-10-01', '2026-10-08');
+  `);
+  legacyDb.close();
+
+  try {
+    const migratedStore = openStore(file);
+    try {
+      assert.deepEqual(
+        migratedStore.listWords(1).map(({ id, homework_name, sv, en }) => [id, homework_name, sv, en]),
+        [[1, 'Homework', 'hund', 'dog']],
+      );
+    } finally {
+      migratedStore.close();
+    }
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
 
 test('date range returns words whose period overlaps', () => {
   assert.equal(store.practiceWords(pid, { from: '2026-10-05', to: '2026-10-06' }).length, 2);

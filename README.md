@@ -13,7 +13,7 @@ Open http://localhost:3000 in Edge or Chrome (they have the best built-in voices
 
 To use it from a tablet on the home network, start with `$env:HOST="0.0.0.0"; npm start` and open `http://<computer-ip>:3000`.
 
-Words are stored in `data/glosor.db` (SQLite). Back up that file to keep the words and results.
+Words are stored in `data/glosor.db` (SQLite). Back up that file to keep the words and results. After updating the app, restart it to apply database changes; existing words without a homework name appear under the default name "Homework".
 
 ## Test
 
